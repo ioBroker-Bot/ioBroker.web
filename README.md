@@ -30,6 +30,14 @@ request lands on whatever adapter holds that port. With **Answer ACME HTTP-01 ch
 Only a request for a published token is answered here, everything else is passed on untouched. Switch
 the option off to keep that path entirely to the web application.
 
+## HTTP/2
+With HTTPS enabled, the web server speaks HTTP/2: the browser loads the page and all its files over a single
+connection with many parallel requests. Clients that do not offer HTTP/2 fall back to HTTP/1.1 automatically,
+and web sockets keep working - browsers open them on a separate HTTP/1.1 connection.
+Without HTTPS the option has no effect, as browsers use HTTP/2 over TLS only.
+
+If a client or a web extension has problems with it, switch the option **Use HTTP/2** (`http2`) off to stay with HTTP/1.1.
+
 ## Extensions
 Web driver supports extensions. 
 The extension is URL handler, that will be called if such URL request appears.
@@ -182,6 +190,12 @@ This is off by default. When enabled:
 	Placeholder for the next version (at the beginning of the line):
 	### **WORK IN PROGRESS**
 -->
+### **WORK IN PROGRESS**
+* (@GermanBluefox) Added: the instance settings show a QR code for the ioBroker.visu app. It carries the addresses and the port of this instance, and the ioBroker.pro credentials of a cloud or iot instance if there is one - without such an instance the app reaches this server in the local network only
+* (@GermanBluefox) Added: with HTTPS enabled, the web server speaks HTTP/2 - the browser loads the page and all its files over a single connection. Clients without HTTP/2 fall back to HTTP/1.1 automatically; the new option "Use HTTP/2" in the instance settings turns it off
+* (@GermanBluefox) `POST /state/<id>` creates the state it writes into for the six ids a visu app reports to: `vis.<X>.<device>.` plus `battery.level`, `battery.state`, `brightness`, `currentLocation`, `alive` or `instanceId`, together with the device they belong to. They are made from the definitions in the adapter, never from the request, and every other id is answered with a 404 as before.
+* (@GermanBluefox) A command a visu app writes into `cloud.<X>.remote.command` is turned into `cloud.<X>.devices.<device>.*` here when the cloud adapter is not running. The app reported nothing at all while that adapter was stopped, although the value had arrived. Nothing changes while the adapter runs — it does this itself. The command state is created when it is missing, so an installation without the cloud adapter can be reported to as well.
+
 ### 9.1.4 (2026-08-31)
 * (@GermanBluefox) Updated packages
 

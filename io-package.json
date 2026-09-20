@@ -200,6 +200,7 @@
     "disableStates": false,
     "disableObjects": false,
     "forceWebSockets": false,
+    "http2": true,
     "language": "",
     "loadingBackgroundColor": "",
     "loadingBackgroundImage": false,
