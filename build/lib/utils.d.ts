@@ -34,3 +34,39 @@ export declare function replaceLink(link: string, adapter: string, instance: num
     port: number | undefined;
     instance?: string;
 }[];
+/** The part of a request that the login redirect helpers read */
+export interface LoginRequest {
+    /** Body of the posted login form */
+    body?: {
+        origin?: string;
+    };
+    /** Parsed query string of the request */
+    query?: Record<string, any>;
+}
+/**
+ * Reads the page the user asked for before the login page took over
+ *
+ * The login form posts its own URL back in `origin`, so the target sits in the query string of that
+ * URL. An already authenticated user opening a login link carries it in `?href=` instead.
+ *
+ * @param req request of the login page
+ * @returns the requested path, or null if there is none or it does not belong to this server
+ */
+export declare function getRequestedPage(req: LoginRequest): string | null;
+/**
+ * Page the user is sent to after a successful login
+ *
+ * @param req request of the login page
+ * @returns the requested path, or `../` - the root of this server - if there is none
+ */
+export declare function getRedirectPage(req: LoginRequest): string;
+/**
+ * URL of the login page that shows the "wrong password" message
+ *
+ * The requested page is carried along fully encoded, so it survives a failed attempt and the
+ * `error` flag stays in the query string, where the login page looks for it.
+ *
+ * @param loginPage path of the login page
+ * @param req request of the failed login
+ */
+export declare function getLoginPageWithError(loginPage: string, req: LoginRequest): string;

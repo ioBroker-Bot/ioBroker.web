@@ -2,6 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AUTO_UPGRADE_OPTIONS_MAPPING = exports.AUTO_UPGRADE_SETTINGS = exports.CONTROLLER_CHANGELOG_URL = void 0;
 exports.replaceLink = replaceLink;
+exports.getRequestedPage = getRequestedPage;
+exports.getRedirectPage = getRedirectPage;
+exports.getLoginPageWithError = getLoginPageWithError;
 /** Url where controller changelog is reachable */
 exports.CONTROLLER_CHANGELOG_URL = 'https://github.com/ioBroker/ioBroker.js-controller/blob/master/CHANGELOG.md';
 /** All possible auto upgrade settings */
@@ -340,5 +343,71 @@ function replaceLink(link, adapter, instance, context) {
         return _urls;
     }
     return [{ url: link, port }];
+}
+/**
+ * Checks for a control character
+ *
+ * Browsers remove tab, newline and carriage return from a URL before they parse it, so a target
+ * like `/<TAB>/example.com` would turn into the protocol relative `//example.com` and leave this
+ * server. Written without a regular expression to keep the `no-control-regex` rule happy.
+ *
+ * @param str string to check
+ */
+function hasControlCharacter(str) {
+    for (let i = 0; i < str.length; i++) {
+        const code = str.charCodeAt(i);
+        if (code <= 0x1f || code === 0x7f) {
+            return true;
+        }
+    }
+    return false;
+}
+/**
+ * Reads the page the user asked for before the login page took over
+ *
+ * The login form posts its own URL back in `origin`, so the target sits in the query string of that
+ * URL. An already authenticated user opening a login link carries it in `?href=` instead.
+ *
+ * @param req request of the login page
+ * @returns the requested path, or null if there is none or it does not belong to this server
+ */
+function getRequestedPage(req) {
+    const origin = req.body?.origin;
+    let href = null;
+    if (origin) {
+        const q = origin.indexOf('?');
+        if (q !== -1) {
+            href = new URLSearchParams(origin.substring(q + 1)).get('href');
+        }
+    }
+    else if (typeof req.query?.href === 'string') {
+        href = req.query.href;
+    }
+    // only a path on this very server - never another origin
+    if (!href || !href.startsWith('/') || href.startsWith('//') || href.includes('\\') || hasControlCharacter(href)) {
+        return null;
+    }
+    return href;
+}
+/**
+ * Page the user is sent to after a successful login
+ *
+ * @param req request of the login page
+ * @returns the requested path, or `../` - the root of this server - if there is none
+ */
+function getRedirectPage(req) {
+    return getRequestedPage(req) || '../';
+}
+/**
+ * URL of the login page that shows the "wrong password" message
+ *
+ * The requested page is carried along fully encoded, so it survives a failed attempt and the
+ * `error` flag stays in the query string, where the login page looks for it.
+ *
+ * @param loginPage path of the login page
+ * @param req request of the failed login
+ */
+function getLoginPageWithError(loginPage, req) {
+    return `${loginPage}?href=${encodeURIComponent(getRequestedPage(req) || '/')}&error`;
 }
 //# sourceMappingURL=utils.js.map

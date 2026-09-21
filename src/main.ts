@@ -23,7 +23,7 @@ import type { SocketSettings, Store, InternalStorageToken } from '@iobroker/sock
 import { WebServer, checkPublicIP, createOAuth2Server } from '@iobroker/webserver';
 
 import type { ExtAPI, LocalMultipleLinkEntry, WebAdapterConfig } from './types.d.ts';
-import { replaceLink } from './lib/utils';
+import { getLoginPageWithError, getRedirectPage, replaceLink } from './lib/utils';
 
 const ONE_MONTH_SEC = 30 * 24 * 3600;
 export type Server = HttpServer | HttpsServer;
@@ -287,29 +287,6 @@ function processWelcome(
             processOneWelcome(ws, isPro, adapterObj, foundInstanceIDs, instances, hosts, hostname, webNamespace, list);
         }
     }
-}
-
-function getRedirectPage(req: Request): string {
-    const body: { origin?: string } = req.body || {};
-    let href: string | null = null;
-
-    if (body.origin) {
-        // the login form posts its own URL back, so the target sits in its query string
-        const q = body.origin.indexOf('?');
-        if (q !== -1) {
-            href = new URLSearchParams(body.origin.substring(q + 1)).get('href');
-        }
-    } else if (typeof req.query?.href === 'string') {
-        // an already authenticated user opening the login page carries it in the query
-        href = req.query.href;
-    }
-
-    // only a path on this very server - never another origin
-    if (!href || !href.startsWith('/') || href.startsWith('//') || href.includes('\\')) {
-        return '../';
-    }
-
-    return href;
 }
 
 /**
@@ -2048,14 +2025,14 @@ export class WebAdapter extends Adapter {
                  * @param res - response object
                  * @param next - express next function
                  * @param redirect - redirect path
-                 * @param origin - origin path
+                 * @param errorPage - URL of the login page that reports the failed attempt
                  */
                 const authenticate = (
                     req: Request,
                     res: Response,
                     next: NextFunction,
                     redirect: string,
-                    origin: string,
+                    errorPage: string,
                 ): void => {
                     passport.authenticate(
                         'local',
@@ -2123,11 +2100,11 @@ export class WebAdapter extends Adapter {
                             } else {
                                 if (err) {
                                     this.log.warn(`Cannot login user: ${err}`);
-                                    res.redirect(`/login/index.html${origin}${origin ? '&error' : '?error'}`);
+                                    res.redirect(errorPage);
                                     return;
                                 }
                                 if (!user?.user) {
-                                    res.redirect(`/login/index.html${origin}${origin ? '&error' : '?error'}`);
+                                    res.redirect(errorPage);
                                     return;
                                 }
                             }
@@ -2142,7 +2119,7 @@ export class WebAdapter extends Adapter {
                                 } else {
                                     if (err) {
                                         this.log.warn(`Cannot login user: ${err}`);
-                                        res.redirect(`/login/index.html${origin}${origin ? '&error' : '?error'}`);
+                                        res.redirect(errorPage);
                                         return;
                                     }
                                 }
@@ -2203,7 +2180,7 @@ export class WebAdapter extends Adapter {
                     if (!whiteListIp) {
                         if (isJs) {
                             res.status(200).send(
-                                `document.location="${LOGIN_PAGE}?href=" + encodeURI(location.href.replace(location.origin, ""));`,
+                                `document.location="${LOGIN_PAGE}?href=" + encodeURIComponent(location.href.replace(location.origin, ""));`,
                             );
                             return;
                         }
@@ -2245,7 +2222,7 @@ export class WebAdapter extends Adapter {
                     // User tries to authenticate with old method, so delete OAuth2 token
                     res.clearCookie('access_token');
 
-                    authenticate(req, res, next, redirect, req.body.origin || '?href=%2F');
+                    authenticate(req, res, next, redirect, getLoginPageWithError(LOGIN_PAGE, req));
                 });
 
                 // Login for applications to preserve cookie
@@ -2257,7 +2234,7 @@ export class WebAdapter extends Adapter {
                         req.body.stayloggedin === true ||
                         req.body.stayloggedin === 'on';
 
-                    authenticate(req, res, next, '', req.body.origin || '?href=%2F');
+                    authenticate(req, res, next, '', getLoginPageWithError(LOGIN_PAGE, req));
                 });
 
                 this.webServer.app.get('/logout', (req: Request, res: Response): void => {
@@ -2338,10 +2315,7 @@ export class WebAdapter extends Adapter {
                             req.body.stayloggedin === true ||
                             req.body.stayloggedin === 'on';
 
-                        const origin = req.body.origin || '?href=%2F';
-                        const redirect = req.originalUrl;
-
-                        authenticate(req, res, next, redirect, origin);
+                        authenticate(req, res, next, req.originalUrl, getLoginPageWithError(LOGIN_PAGE, req));
                     } else if (this.config.oauth && !(req.headers.accept || '').includes('text/html')) {
                         // An API client cannot do anything with an HTML login page. Answer with the
                         // OAuth challenge instead so it can discover where to authorize itself

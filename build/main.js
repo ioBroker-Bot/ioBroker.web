@@ -243,24 +243,6 @@ function processWelcome(welcomeScreen, isPro, adapterObj, foundInstanceIDs, inst
         }
     }
 }
-function getRedirectPage(req) {
-    let redirect = '../';
-    let parts;
-    const body = req.body || {};
-    // const isDev = req.url.includes('?dev&');
-    const origin = body.origin || '?href=%2F';
-    if (origin) {
-        parts = origin.split('=');
-        if (parts.length > 1 && parts[1]) {
-            redirect = decodeURIComponent(parts[1]);
-            // if some invalid characters in redirect
-            if (redirect.match(/[^-_a-zA-Z0-9&%?./]/) || redirect.startsWith('//') || redirect.includes('://')) {
-                redirect = '../';
-            }
-        }
-    }
-    return redirect;
-}
 /**
  * Give an HTTP/2 response the `_implicitHeader()` an HTTP/1 response has.
  *
@@ -1702,9 +1684,9 @@ class WebAdapter extends adapter_core_1.Adapter {
                  * @param res - response object
                  * @param next - express next function
                  * @param redirect - redirect path
-                 * @param origin - origin path
+                 * @param errorPage - URL of the login page that reports the failed attempt
                  */
-                const authenticate = (req, res, next, redirect, origin) => {
+                const authenticate = (req, res, next, redirect, errorPage) => {
                     passport_1.default.authenticate('local', (err, user) => {
                         // replace user
                         if (user?.user && this.config.userListEnabled) {
@@ -1760,11 +1742,11 @@ class WebAdapter extends adapter_core_1.Adapter {
                         else {
                             if (err) {
                                 this.log.warn(`Cannot login user: ${err}`);
-                                res.redirect(`/login/index.html${origin}${origin ? '&error' : '?error'}`);
+                                res.redirect(errorPage);
                                 return;
                             }
                             if (!user?.user) {
-                                res.redirect(`/login/index.html${origin}${origin ? '&error' : '?error'}`);
+                                res.redirect(errorPage);
                                 return;
                             }
                         }
@@ -1779,7 +1761,7 @@ class WebAdapter extends adapter_core_1.Adapter {
                             else {
                                 if (err) {
                                     this.log.warn(`Cannot login user: ${err}`);
-                                    res.redirect(`/login/index.html${origin}${origin ? '&error' : '?error'}`);
+                                    res.redirect(errorPage);
                                     return;
                                 }
                             }
@@ -1831,7 +1813,7 @@ class WebAdapter extends adapter_core_1.Adapter {
                     // if not authenticated
                     if (!whiteListIp) {
                         if (isJs) {
-                            res.status(200).send(`document.location="${LOGIN_PAGE}?href=" + encodeURI(location.href.replace(location.origin, ""));`);
+                            res.status(200).send(`document.location="${LOGIN_PAGE}?href=" + encodeURIComponent(location.href.replace(location.origin, ""));`);
                             return;
                         }
                         if (this.config.basicAuth) {
@@ -1851,7 +1833,7 @@ class WebAdapter extends adapter_core_1.Adapter {
                     }
                 };
                 this.webServer.app.post('/login', (req, res, next) => {
-                    let redirect = getRedirectPage(req);
+                    let redirect = (0, utils_1.getRedirectPage)(req);
                     req.body.password = (req.body.password || '').toString();
                     req.body.username = (req.body.username || '').toString();
                     req.body.stayLoggedIn =
@@ -1865,7 +1847,7 @@ class WebAdapter extends adapter_core_1.Adapter {
                     }
                     // User tries to authenticate with old method, so delete OAuth2 token
                     res.clearCookie('access_token');
-                    authenticate(req, res, next, redirect, req.body.origin || '?href=%2F');
+                    authenticate(req, res, next, redirect, (0, utils_1.getLoginPageWithError)(LOGIN_PAGE, req));
                 });
                 // Login for applications to preserve cookie
                 this.webServer.app.post('/loginApp', (req, res, next) => {
@@ -1875,7 +1857,7 @@ class WebAdapter extends adapter_core_1.Adapter {
                         req.body.stayloggedin === 'true' ||
                             req.body.stayloggedin === true ||
                             req.body.stayloggedin === 'on';
-                    authenticate(req, res, next, '', req.body.origin || '?href=%2F');
+                    authenticate(req, res, next, '', (0, utils_1.getLoginPageWithError)(LOGIN_PAGE, req));
                 });
                 this.webServer.app.get('/logout', (req, res) => {
                     const isDev = req.url.includes('?dev');
@@ -1943,9 +1925,7 @@ class WebAdapter extends adapter_core_1.Adapter {
                             req.body.stayloggedin === 'true' ||
                                 req.body.stayloggedin === true ||
                                 req.body.stayloggedin === 'on';
-                        const origin = req.body.origin || '?href=%2F';
-                        const redirect = req.originalUrl;
-                        authenticate(req, res, next, redirect, origin);
+                        authenticate(req, res, next, req.originalUrl, (0, utils_1.getLoginPageWithError)(LOGIN_PAGE, req));
                     }
                     else if (this.config.oauth && !(req.headers.accept || '').includes('text/html')) {
                         // An API client cannot do anything with an HTML login page. Answer with the
@@ -2741,7 +2721,7 @@ class WebAdapter extends adapter_core_1.Adapter {
                             const buffer = this.loginPage;
                             const isAuthenticated = !this.config.auth || req.isAuthenticated?.() || (!req.isAuthenticated && req.user);
                             if (isAuthenticated || this.isInWhiteList(req)) {
-                                res.redirect(getRedirectPage(req));
+                                res.redirect((0, utils_1.getRedirectPage)(req));
                                 return;
                             }
                             if (buffer === null || buffer === undefined) {

@@ -73,7 +73,8 @@
     "build/"
   ],
   "scripts": {
-    "test": "npm run test:integration",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "mocha test/testRedirect.js --exit",
     "test:integration": "mocha test/testNoAuthSSL.js test/testNoAuthNoSSL.js --exit",
     "test:package": "mocha test/testPackageFiles.js --exit",
     "prepublishOnly": "node tasks",

@@ -439,3 +439,83 @@ export function replaceLink(
     }
     return [{ url: link, port }];
 }
+
+/** The part of a request that the login redirect helpers read */
+export interface LoginRequest {
+    /** Body of the posted login form */
+    body?: { origin?: string };
+    /** Parsed query string of the request */
+    query?: Record<string, any>;
+}
+
+/**
+ * Checks for a control character
+ *
+ * Browsers remove tab, newline and carriage return from a URL before they parse it, so a target
+ * like `/<TAB>/example.com` would turn into the protocol relative `//example.com` and leave this
+ * server. Written without a regular expression to keep the `no-control-regex` rule happy.
+ *
+ * @param str string to check
+ */
+function hasControlCharacter(str: string): boolean {
+    for (let i = 0; i < str.length; i++) {
+        const code = str.charCodeAt(i);
+        if (code <= 0x1f || code === 0x7f) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Reads the page the user asked for before the login page took over
+ *
+ * The login form posts its own URL back in `origin`, so the target sits in the query string of that
+ * URL. An already authenticated user opening a login link carries it in `?href=` instead.
+ *
+ * @param req request of the login page
+ * @returns the requested path, or null if there is none or it does not belong to this server
+ */
+export function getRequestedPage(req: LoginRequest): string | null {
+    const origin: string | undefined = req.body?.origin;
+    let href: string | null = null;
+
+    if (origin) {
+        const q = origin.indexOf('?');
+        if (q !== -1) {
+            href = new URLSearchParams(origin.substring(q + 1)).get('href');
+        }
+    } else if (typeof req.query?.href === 'string') {
+        href = req.query.href;
+    }
+
+    // only a path on this very server - never another origin
+    if (!href || !href.startsWith('/') || href.startsWith('//') || href.includes('\\') || hasControlCharacter(href)) {
+        return null;
+    }
+
+    return href;
+}
+
+/**
+ * Page the user is sent to after a successful login
+ *
+ * @param req request of the login page
+ * @returns the requested path, or `../` - the root of this server - if there is none
+ */
+export function getRedirectPage(req: LoginRequest): string {
+    return getRequestedPage(req) || '../';
+}
+
+/**
+ * URL of the login page that shows the "wrong password" message
+ *
+ * The requested page is carried along fully encoded, so it survives a failed attempt and the
+ * `error` flag stays in the query string, where the login page looks for it.
+ *
+ * @param loginPage path of the login page
+ * @param req request of the failed login
+ */
+export function getLoginPageWithError(loginPage: string, req: LoginRequest): string {
+    return `${loginPage}?href=${encodeURIComponent(getRequestedPage(req) || '/')}&error`;
+}
