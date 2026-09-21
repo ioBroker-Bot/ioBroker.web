@@ -66,7 +66,8 @@ export async function getAddresses(socket: VisuSocket, bind: string, host: strin
     const addresses: string[] = [];
     const hostConfig = await socket.getObject(`system.host.${host}`);
     const interfaces = hostConfig?.native?.hardware?.networkInterfaces as
-        Record<string, NetworkInterface[]> | undefined;
+        | Record<string, NetworkInterface[]>
+        | undefined;
     if (interfaces) {
         Object.keys(interfaces).forEach(name =>
             interfaces[name]?.forEach(iface => {
